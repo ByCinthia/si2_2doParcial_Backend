@@ -1,0 +1,553 @@
+{
+  "info": {
+    "_postman_id": "usuarios-api-collection",
+    "name": "API Usuarios - Backend Django",
+    "description": "Colección completa de endpoints para el módulo de usuarios",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "login", ""]
+            },
+            "description": "Login de usuario. Retorna tokens JWT (access y refresh) y datos del usuario."
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar Cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"nuevo_cliente\",\n    \"email\": \"cliente@example.com\",\n    \"password\": \"password123\",\n    \"fcmToken\": \"token_fcm_opcional\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/registrar/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "registrar", ""]
+            },
+            "description": "Registro público de clientes. Asigna automáticamente el rol 'Cliente' y retorna tokens JWT."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", "refresh", ""]
+            },
+            "description": "Refresca el access token usando el refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"token\": \"{{token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/token/verify/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", "verify", ""]
+            },
+            "description": "Verifica si un token es válido."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints de autenticación y registro"
+    },
+    {
+      "name": "Usuarios",
+      "item": [
+        {
+          "name": "Listar Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", ""]
+            },
+            "description": "Lista todos los usuarios del sistema."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"nuevo_usuario\",\n    \"email\": \"usuario@example.com\",\n    \"password\": \"password123\",\n    \"idRol\": 1,\n    \"fcmToken\": \"token_fcm_opcional\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", ""]
+            },
+            "description": "Crea un nuevo usuario (requiere autenticación de admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", ""]
+            },
+            "description": "Obtiene los detalles de un usuario específico por ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Usuario (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"usuario_actualizado\",\n    \"email\": \"nuevo@example.com\",\n    \"idRol\": 2,\n    \"activo\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", ""]
+            },
+            "description": "Actualiza completamente un usuario."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Usuario (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"nuevo_email@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", ""]
+            },
+            "description": "Actualiza parcialmente un usuario (solo los campos enviados)."
+          },
+          "response": []
+        },
+        {
+          "name": "Desactivar Usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", ""]
+            },
+            "description": "Desactiva un usuario (soft delete). El usuario no se elimina de la BD."
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Usuario Permanentemente",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/permanente/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", "permanente", ""]
+            },
+            "description": "Elimina permanentemente un usuario de la base de datos."
+          },
+          "response": []
+        },
+        {
+          "name": "Cambiar Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id_usuario\": 1,\n    \"password_actual\": \"password123\",\n    \"password_nueva\": \"nueva_password456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/cambiar-password/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "cambiar-password", ""]
+            },
+            "description": "Cambia la contraseña de un usuario autenticado."
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/buscar/?q=juan",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "buscar", ""],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "juan",
+                  "description": "Término de búsqueda (username o email)"
+                }
+              ]
+            },
+            "description": "Busca usuarios por username o email."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar FCM Token",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"fcmToken\": \"nuevo_token_fcm_12345\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/1/fcm-token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "1", "fcm-token", ""]
+            },
+            "description": "Actualiza el token FCM de un usuario para notificaciones push."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints de gestión de usuarios"
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "Listar Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", ""]
+            },
+            "description": "Lista todos los roles del sistema."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Rol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Administrador\",\n    \"descripcion\": \"Acceso total al sistema\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", ""]
+            },
+            "description": "Crea un nuevo rol en el sistema."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Rol",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", "1", ""]
+            },
+            "description": "Obtiene los detalles de un rol específico por ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Rol (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Super Administrador\",\n    \"descripcion\": \"Acceso total y privilegios especiales\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", "1", ""]
+            },
+            "description": "Actualiza completamente un rol."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Rol (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"descripcion\": \"Nueva descripción del rol\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", "1", ""]
+            },
+            "description": "Actualiza parcialmente un rol (solo los campos enviados)."
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Rol",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", "1", ""]
+            },
+            "description": "Elimina un rol (solo si no tiene usuarios asociados)."
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar Rol por Nombre",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/roles/buscar/?nombre=Admin",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usuarios", "roles", "buscar", ""],
+              "query": [
+                {
+                  "key": "nombre",
+                  "value": "Admin",
+                  "description": "Nombre exacto del rol a buscar"
+                }
+              ]
+            },
+            "description": "Busca un rol por su nombre exacto."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints de gestión de roles"
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{url_local}}",
+      "type": "string"
+    },
+    {
+      "key": "url_local",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "url_dev",
+      "value": "https://dev-api.tudominio.com",
+      "type": "string"
+    },
+    {
+      "key": "url_prod",
+      "value": "https://api.tudominio.com",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
