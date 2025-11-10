@@ -4,6 +4,8 @@ from .views import (
     ProductoDetailView,
     ProductoInventoryView,
     VariantStockUpdateView,
+    InventarioListView,
+    InventarioAjustarView,
 )
 
 app_name = 'productos'
@@ -13,4 +15,7 @@ urlpatterns = [
     path('<int:pk>/', ProductoDetailView.as_view(), name='producto-detail'),
     path('<int:pk>/inventory/', ProductoInventoryView.as_view(), name='producto-inventory'),
     path('variants/<int:variant_id>/stock/', VariantStockUpdateView.as_view(), name='variant-stock-update'),
+    # Inventario global: listar y ajustar
+    path('inventory/all/', InventarioListView.as_view(), name='inventario-list'),
+    path('inventory/adjust/', InventarioAjustarView.as_view(), name='inventario-adjust'),
 ]

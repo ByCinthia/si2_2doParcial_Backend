@@ -18,3 +18,13 @@ class ProductVariantAdmin(admin.ModelAdmin):
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):
 	list_display = ('id', 'product', 'image_url')
+
+
+from .models import InventoryMovement
+
+
+@admin.register(InventoryMovement)
+class InventoryMovementAdmin(admin.ModelAdmin):
+	list_display = ('id', 'variant', 'usuario', 'previous_stock', 'new_stock', 'delta', 'fecha')
+	search_fields = ('variant__product__name', 'usuario__username', 'motivo')
+	readonly_fields = ('fecha',)

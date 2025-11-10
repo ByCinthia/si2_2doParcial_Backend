@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from usuarios.permissions import CanManageUsers
 import logging
 
 from .services.services_producto import ProductoService
@@ -68,3 +69,30 @@ class VariantStockUpdateView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class InventarioListView(APIView):
+    """Lista todas las variantes (inventario global)"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        success, data, status_code = ProductoService.listar_todo_inventario()
+        return Response(data, status=status_code)
+
+
+class InventarioAjustarView(APIView):
+    """Ajusta stock: body -> { "variant_id": int, "delta": int } o { "variant_id": int, "stock": int }
+    Solo usuarios con permiso pueden ajustar inventario."""
+    permission_classes = [CanManageUsers]
+
+    def post(self, request):
+        variant_id = request.data.get('variant_id')
+        delta = request.data.get('delta')
+        stock = request.data.get('stock')
+        motivo = request.data.get('motivo')
+
+        if not variant_id:
+            return Response({"error": "variant_id requerido"}, status=400)
+
+        success, data, status_code = ProductoService.ajustar_stock(variant_id, delta=delta, stock=stock, usuario=getattr(request, 'user', None), motivo=motivo)
+        return Response(data, status=status_code)

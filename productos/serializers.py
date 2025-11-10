@@ -18,6 +18,27 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         model = ProductVariant
         fields = ['id', 'sku', 'size', 'color', 'model_name', 'price', 'stock']
 
+    def validate_stock(self, value):
+        """Ensure stock is at least the minimum threshold (2)."""
+        try:
+            v = int(value)
+        except Exception:
+            raise serializers.ValidationError("Stock must be an integer")
+        if v < 2:
+            raise serializers.ValidationError("El stock mínimo permitido es 2")
+        return v
+
+
+class InventoryVariantSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    categoria = CategoriaSerializer(source='product.categoria', read_only=True)
+
+    class Meta:
+        model = ProductVariant
+        fields = ['id', 'product_id', 'product_name', 'categoria', 'sku', 'size', 'color', 'model_name', 'price', 'stock']
+
 
 class ProductListSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, required=False)
@@ -45,9 +66,18 @@ class ProductDetailSerializer(ProductListSerializer):
         # crear producto
         product = super().create(validated_data)
 
-        # crear variantes
+        # crear variantes (asegurar stock mínimo)
         from .models import ProductVariant, ProductImage
         for v in variants_data:
+            s = v.get('stock', None)
+            if s is None:
+                v['stock'] = 2
+            else:
+                try:
+                    if int(s) < 2:
+                        v['stock'] = 2
+                except Exception:
+                    v['stock'] = 2
             ProductVariant.objects.create(product=product, **v)
 
         # crear imágenes
@@ -69,9 +99,18 @@ class ProductDetailSerializer(ProductListSerializer):
         # si se proveen variantes, reemplazamos (simple approach)
         from .models import ProductVariant, ProductImage
         if variants_data is not None:
-            # borrar existentes y crear nuevas
+            # borrar existentes y crear nuevas (asegurar stock mínimo)
             ProductVariant.objects.filter(product=product).delete()
             for v in variants_data:
+                s = v.get('stock', None)
+                if s is None:
+                    v['stock'] = 2
+                else:
+                    try:
+                        if int(s) < 2:
+                            v['stock'] = 2
+                    except Exception:
+                        v['stock'] = 2
                 ProductVariant.objects.create(product=product, **v)
 
         if images_data is not None:
