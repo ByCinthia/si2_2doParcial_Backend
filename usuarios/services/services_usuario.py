@@ -8,6 +8,9 @@ from usuarios.models import Usuario, Rol
 from usuarios.serializers import (
     UsuarioDetailSerializer,
     UsuarioCreateSerializer,
+    UsuarioSerializer,
+    UsuarioLoginSerializer,  
+   
 )
 
 

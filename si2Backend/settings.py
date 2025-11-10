@@ -82,6 +82,16 @@ if USE_CORS:
     # corsheaders debe ir antes de CommonMiddleware
     MIDDLEWARE.insert(1, 'corsheaders.middleware.CorsMiddleware')
 
+# --- agregar esto (dev only) ---
+# permitir temporalmente todos los orígenes (cambia a CORS_ALLOWED_ORIGINS en producción)
+CORS_ALLOW_ALL_ORIGINS = True
+
+# permitir headers necesarios (incluye Authorization)
+from corsheaders.defaults import default_headers, default_methods
+CORS_ALLOW_HEADERS = list(default_headers) + ["Authorization"]
+CORS_ALLOW_METHODS = list(default_methods)
+# --- fin agregado ---
+
 ROOT_URLCONF = 'si2Backend.urls'
 
 TEMPLATES = [
