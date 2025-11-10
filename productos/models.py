@@ -7,6 +7,8 @@ class Product(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     base_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # Relacion con Categoria (protegida) - requiere que la categoría exista
+    categoria = models.ForeignKey('categorias.Categoria', related_name='productos', on_delete=models.PROTECT, null=True, blank=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -46,6 +46,13 @@ CSRF_TRUSTED_ORIGINS = [
 # decidir si activamos CORS desde .env
 USE_CORS = env.bool('USE_CORS', default=True)
 
+# CORS settings (development-friendly). Ajusta/limita en producción.
+if USE_CORS:
+    # Permitir todos los orígenes para desarrollo local (cambia a CORS_ALLOWED_ORIGINS en producción)
+    CORS_ALLOW_ALL_ORIGINS = True
+    # Permitir envío de credenciales (cookies) si el front los usa
+    CORS_ALLOW_CREDENTIALS = True
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -62,6 +69,7 @@ INSTALLED_APPS = [
    # 'corsheaders',   # <-- agregado
     'usuarios',
     'productos',  # nueva app
+    'categorias',  # app de categorías añadida
     'ventas',
 ]
 
@@ -108,11 +116,11 @@ WSGI_APPLICATION = 'si2Backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT'),
+        'NAME': 'boutique2',
+        'USER': 'postgres',
+        'PASSWORD': '9638660',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 

@@ -1,45 +1,66 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+import logging
 
-from .models import Product, ProductVariant
+from .services.services_producto import ProductoService
 from .serializers import ProductListSerializer, ProductDetailSerializer, ProductVariantSerializer
+from .models import ProductVariant
 
-# Create your views here.
+logger = logging.getLogger(__name__)
 
-class ProductListView(APIView):
-    permission_classes = [AllowAny]
+
+class ProductoListCreateView(APIView):
+    """Listar y crear productos"""
+
+    def get_permissions(self):
+        # permitir lectura pública, creación requiere autenticación
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get(self, request):
-        qs = Product.objects.filter(active=True).prefetch_related('images','variants')
-        serializer = ProductListSerializer(qs, many=True)
-        return Response(serializer.data)
+        success, data, status_code = ProductoService.listar_productos()
+        return Response(data, status=status_code)
 
-class ProductDetailView(APIView):
-    permission_classes = [AllowAny]
-    def get(self, request, pk):
-        product = get_object_or_404(Product.objects.prefetch_related('images','variants'), pk=pk, active=True)
-        serializer = ProductDetailSerializer(product)
-        return Response(serializer.data)
+    def post(self, request):
+        success, data, status_code = ProductoService.crear_producto(request.data)
+        return Response(data, status=status_code)
 
-class ProductInventoryView(APIView):
-    """
-    GET /api/productos/<pk>/inventory/  -> lista variantes con stock
-    """
+
+class ProductoDetailView(APIView):
     permission_classes = [AllowAny]
+
     def get(self, request, pk):
-        product = get_object_or_404(Product, pk=pk)
-        variants = product.variants.all()
-        serializer = ProductVariantSerializer(variants, many=True)
-        return Response(serializer.data)
+        success, data, status_code = ProductoService.obtener_producto(pk)
+        return Response(data, status=status_code)
+
+    def put(self, request, pk):
+        success, data, status_code = ProductoService.actualizar_producto(pk, request.data)
+        return Response(data, status=status_code)
+
+    def patch(self, request, pk):
+        success, data, status_code = ProductoService.actualizar_producto(pk, request.data)
+        return Response(data, status=status_code)
+
+    def delete(self, request, pk):
+        success, data, status_code = ProductoService.eliminar_producto(pk)
+        return Response(data, status=status_code)
+
+
+class ProductoInventoryView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        success, data, status_code = ProductoService.listar_inventario(pk)
+        return Response(data, status=status_code)
+
 
 class VariantStockUpdateView(APIView):
-    """
-    PATCH /api/productos/variants/<variant_id>/stock/ -> actualizar stock (body: {"stock": 10})
-    Requiere autenticación (IsAuthenticated) o cambiar según tu lógica.
-    """
     permission_classes = [IsAuthenticated]
+
     def patch(self, request, variant_id):
         variant = get_object_or_404(ProductVariant, pk=variant_id)
         serializer = ProductVariantSerializer(variant, data=request.data, partial=True)
