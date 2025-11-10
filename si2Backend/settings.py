@@ -43,6 +43,8 @@ CSRF_TRUSTED_ORIGINS = [
     
 ]
 
+# decidir si activamos CORS desde .env
+USE_CORS = env.bool('USE_CORS', default=True)
 
 # Application definition
 
@@ -57,8 +59,14 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'cloudinary_storage',
     'cloudinary',
+   # 'corsheaders',   # <-- agregado
     'usuarios',
+    'productos',  # nueva app
+    'ventas',
 ]
+
+if USE_CORS:
+    INSTALLED_APPS.insert(0, 'corsheaders')  # opcional: añadir al inicio
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -69,6 +77,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if USE_CORS:
+    # corsheaders debe ir antes de CommonMiddleware
+    MIDDLEWARE.insert(1, 'corsheaders.middleware.CorsMiddleware')
 
 ROOT_URLCONF = 'si2Backend.urls'
 
@@ -161,11 +173,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'usuarios.authentication.CustomJWTAuthentication',  # Usar autenticación personalizada
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "usuarios.authentication.CustomJWTAuthentication",
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
     ),
 }
 

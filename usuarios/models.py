@@ -22,6 +22,7 @@ class Usuario(models.Model):
     email = models.EmailField(max_length=255, unique=True)
     password = models.CharField(max_length=255)
     fcmToken = models.CharField(max_length=255, blank=True, null=True)
+    telefono = models.CharField(max_length=15, blank=True, null=True)  # <-- agregado
     rol = models.ForeignKey(Rol, on_delete=models.PROTECT, related_name='usuarios')
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)

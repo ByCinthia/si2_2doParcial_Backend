@@ -2,18 +2,80 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework_simplejwt.tokens import RefreshToken
-from ..models import Usuario, Rol
-from ..serializers import (
-    UsuarioSerializer, 
-    UsuarioCreateSerializer, 
+from django.shortcuts import get_object_or_404
+
+from usuarios.models import Usuario, Rol
+from usuarios.serializers import (
     UsuarioDetailSerializer,
-    UsuarioLoginSerializer
+    UsuarioCreateSerializer,
 )
 
 
 class UsuarioService:
     """Servicio para la lógica de negocio de Usuarios"""
-    
+
+    @staticmethod
+    def _puede_crear_rol(usuario_empleado, rol_objetivo):
+        """Define si el empleado puede asignar/crear un usuario con rol_objetivo"""
+        if not usuario_empleado or not hasattr(usuario_empleado, 'rol') or not usuario_empleado.rol:
+            return False
+        nombre = usuario_empleado.rol.nombre
+        objetivo = rol_objetivo.nombre
+        if nombre == 'SuperAdmin':
+            return True
+        if nombre in ['Trabajador', 'Vendedor']:
+            return objetivo in ['Cliente', 'Cajero', 'Trabajador', 'Vendedor']
+        if nombre == 'Cajero':
+            return objetivo == 'Cliente'
+        return False
+
+    @staticmethod
+    def crear_usuario(data, creado_por=None):
+        """
+        Crea un usuario (cliente o trabajador).
+        - creado_por: instancia Usuario que realiza la creación (para auditoría y permisos).
+        """
+        try:
+            # role must be provided (idRol or nombre)
+            rol_id = data.get('rol') or data.get('rol_id')
+            if not rol_id:
+                return False, {"error": "Debe especificar el rol (campo 'rol')"}, 400
+
+            # obtener rol
+            try:
+                # aceptar id numeric o nombre
+                if isinstance(rol_id, int) or (isinstance(rol_id, str) and rol_id.isdigit()):
+                    rol_obj = Rol.objects.get(idRol=int(rol_id))
+                else:
+                    rol_obj = Rol.objects.get(nombre=rol_id)
+            except Rol.DoesNotExist:
+                return False, {"error": "Rol especificado no existe"}, 400
+
+            # verificar permisos del creador
+            if creado_por:
+                if not UsuarioService._puede_crear_rol(creado_por, rol_obj):
+                    return False, {"error": "No tienes permisos para crear usuarios con ese rol"}, 403
+            else:
+                # sin creador, no permitimos creación (no hay registro público)
+                return False, {"error": "Creación de usuarios sólo permitida por personal autorizado"}, 401
+
+            # preparar datos para el serializer (forzar rol correcto)
+            payload = data.copy()
+            payload['rol'] = rol_obj.idRol
+            payload['activo'] = payload.get('activo', True)
+
+            serializer = UsuarioCreateSerializer(data=payload)
+            if not serializer.is_valid():
+                return False, {"errors": serializer.errors}, 400
+
+            usuario = serializer.save()
+            return True, {"message": "Usuario creado", "usuario": UsuarioDetailSerializer(usuario).data}, 201
+
+        except IntegrityError as e:
+            return False, {"error": "Error de integridad: " + str(e)}, 400
+        except Exception as e:
+            return False, {"error": "Error interno: " + str(e)}, 500
+
     @staticmethod
     def listar_usuarios():
         """
@@ -160,7 +222,7 @@ class UsuarioService:
         """
         Autentica un usuario y genera tokens JWT
         Args:
-            data: Credenciales de login (username, password)
+            data: Credenciales de login (username/email, password)
         Returns:
             tuple: (success, data/error, status_code)
         """
@@ -168,27 +230,34 @@ class UsuarioService:
             serializer = UsuarioLoginSerializer(data=data)
             if not serializer.is_valid():
                 return False, serializer.errors, 400
+
+            validated = serializer.validated_data
+            email = validated.get('email')
+            username = validated.get('username')
+            password = validated.get('password')
+
+            # Buscar usuario por email o username
+            if email:
+                usuario = Usuario.objects.select_related('rol').filter(email=email).first()
+            elif username:
+                usuario = Usuario.objects.select_related('rol').filter(username=username).first()
+            else:
+                usuario = None
             
-            email = serializer.validated_data['email']
-            password = serializer.validated_data['password']
-            
-            # Buscar usuario
-            try:
-                usuario = Usuario.objects.select_related('rol').get(email=email)
-            except ObjectDoesNotExist:
+            if not usuario:
                 return False, {"error": "Credenciales inválidas"}, 401
-            
+
             # Verificar si está activo
             if not usuario.activo:
                 return False, {"error": "Usuario inactivo"}, 403
-            
+
             # Verificar contraseña
             if not usuario.check_password(password):
                 return False, {"error": "Credenciales inválidas"}, 401
-            
+
             # Generar tokens JWT
             refresh = RefreshToken.for_user(usuario)
-            
+
             return True, {
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
