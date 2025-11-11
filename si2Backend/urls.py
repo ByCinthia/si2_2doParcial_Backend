@@ -32,4 +32,16 @@ urlpatterns = [
     
     # Usuarios endpoints
     path('api/usuarios/', include('usuarios.urls')),
+    
+    # Productos endpoints
+    path('api/productos/', include('productos.urls')),
+    
+    # Catálogo endpoints (público)
+    path('api/catalogo/', include('catalogo.urls')),
+    
+    # Notificaciones endpoints
+    path('api/notificaciones/', include('notificaciones.urls')),
+    
+    # Compras endpoints
+    path('api/compras/', include('compras.urls')),
 ]

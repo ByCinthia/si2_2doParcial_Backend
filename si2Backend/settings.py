@@ -35,12 +35,12 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # CSRF - Permitir todos los orígenes (proyecto académico)
+# CSRF trusted origins: must include scheme (http:// or https://) since Django 4.0
+# For academic/demo purposes we allow onrender subdomains and localhost entries.
 CSRF_TRUSTED_ORIGINS = [
     'https://*.onrender.com',
-    'http://*.onrender.com',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    '*'
 ]
 
 
@@ -53,15 +53,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',  # CORS headers
     'rest_framework',
     'rest_framework_simplejwt',
     'cloudinary_storage',
     'cloudinary',
     'usuarios',
+    'productos',
+    'catalogo',
+    'notificaciones',
+    'compras',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS debe ir después de SecurityMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -196,3 +202,43 @@ SIMPLE_JWT = {
     
     'JTI_CLAIM': 'jti',
 }
+
+# ==================== CORS Configuration ====================
+# Permite peticiones desde el frontend (desarrollo y producción)
+
+# Para DESARROLLO: Permitir todos los orígenes
+CORS_ALLOW_ALL_ORIGINS = True
+
+# Para PRODUCCIÓN: Descomentar y especificar orígenes permitidos
+# CORS_ALLOWED_ORIGINS = [
+#     'http://localhost:3000',      # React/Next.js
+#     'http://localhost:5173',      # Vite
+#     'http://localhost:4200',      # Angular
+#     'https://tu-dominio.com',     # Tu dominio en producción
+# ]
+
+# Permitir cookies y credenciales
+CORS_ALLOW_CREDENTIALS = True
+
+# Headers permitidos
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Métodos HTTP permitidos
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
