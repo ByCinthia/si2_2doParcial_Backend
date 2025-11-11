@@ -1,4 +1,6 @@
 from django.db import models
+from cloudinary.models import CloudinaryField
+from django.utils import timezone
 
 # Create your models here.
 
@@ -18,12 +20,21 @@ class Product(models.Model):
 
 class ProductImage(models.Model):
     id = models.AutoField(primary_key=True)
-    product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
-    # usar URLField para simplicidad; puedes cambiar a ImageField + storage si configuras cloudinary/local
-    image_url = models.URLField(max_length=1000, blank=True)
+    product = models.ForeignKey('Product', related_name='images', on_delete=models.CASCADE)
+    # permitir NULL/blank para no obligar un valor en filas existentes
+    image = CloudinaryField('image', folder='products', blank=True, null=True)
+    alt_text = models.CharField(max_length=255, blank=True)
+    is_main = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+    # usar default en lugar de auto_now_add para evitar conflicto con filas existentes
+    # default=timezone.now dará la fecha actual en filas antiguas y nuevas
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['order', '-created_at']
 
     def __str__(self):
-        return f"Image for {self.product_id}"
+        return f"Image {self.id} for {self.product}"
 
 class ProductVariant(models.Model):
     """

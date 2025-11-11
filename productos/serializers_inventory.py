@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import InventoryMovement
+from .models import InventoryMovement, ProductImage
 
 
 class InventoryMovementSerializer(serializers.ModelSerializer):
@@ -13,3 +13,10 @@ class InventoryMovementSerializer(serializers.ModelSerializer):
         if obj.usuario:
             return {'id': obj.usuario.idUsuario, 'username': obj.usuario.username, 'email': obj.usuario.email}
         return None
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ['id', 'product', 'image', 'alt_text', 'is_main', 'order', 'created_at']
+        read_only_fields = ['id', 'created_at']

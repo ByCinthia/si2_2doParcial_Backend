@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import environ
 from datetime import timedelta
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -73,6 +74,8 @@ INSTALLED_APPS = [
     'ventas',
 ]
 
+# ya se añadieron arriba 'cloudinary' y 'cloudinary_storage' — no repetirlos
+
 if USE_CORS:
     INSTALLED_APPS.insert(0, 'corsheaders')  # opcional: añadir al inicio
 
@@ -116,9 +119,9 @@ WSGI_APPLICATION = 'si2Backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'boutique2',
+        'NAME': 'ecomerce_db',
         'USER': 'postgres',
-        'PASSWORD': '9638660',
+        'PASSWORD': '7722794',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -162,14 +165,16 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Cloudinary Configuration
-#CLOUDINARY_STORAGE = {
- #   'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME'),
-  #  'API_KEY': env('CLOUDINARY_API_KEY'),
-   # 'API_SECRET': env('CLOUDINARY_API_SECRET'),
-#}
+CLOUDINARY = {
+    'cloud_name': os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    'api_key': os.environ.get('CLOUDINARY_API_KEY'),
+    'api_secret': os.environ.get('CLOUDINARY_API_SECRET'),
+}
 
-# Set Cloudinary as default file storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# Usar Cloudinary como storage backend (opcional; útil si usas ImageField)
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+# Puedes dejar CLOUDINARY settings vacíos: la lib lee CLOUDINARY_URL desde las env vars
 
 # Media files
 MEDIA_URL = '/media/'

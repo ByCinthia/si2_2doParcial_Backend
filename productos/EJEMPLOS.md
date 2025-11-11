@@ -49,3 +49,11 @@ Respuesta (200):
 Notas:
 - Las tallas/colores/model_name se guardan en ProductVariant; frontend puede filtrar o agrupar por size/color/model.
 - Las imágenes se guardan como URL por simplicidad; si usas storage (cloudinary/local) cambia ProductImage.image_url por ImageField y configura storage.
+
+# Ejemplos de uso — app `productos`
+
+## Imágenes
+Añadido un ejemplo detallado de subida y uso de imágenes en:
+- productos/EJEMPLOS_IMAGENES.md
+
+(Ver ejemplo para curl, fetch, verificación en shell y Cloudinary.)
