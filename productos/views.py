@@ -7,14 +7,16 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from usuarios.permissions import CanManageUsers
 import logging
 import json
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from django.db import transaction
+from django.db.models import Q
 
 from .services.services_producto import ProductoService
-from .serializers import ProductListSerializer, ProductDetailSerializer, ProductVariantSerializer
+from .serializers import ProductListSerializer, ProductDetailSerializer, ProductVariantSerializer, ProductSerializer
 from .models import Product, ProductVariant, ProductImage
 from .serializers_inventory import ProductImageSerializer
 from categorias.models import Categoria
+from ventas.models import MovimientoInventario
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +43,25 @@ class ProductoListCreateView(APIView):
 
     def post(self, request):
         try:
-            # Pasar el objeto request entero al servicio para que pueda manejar form-data y files
-            success, data, status_code = ProductoService.crear_producto(request)
-            return Response(data, status=status_code)
-        except Exception:
-            logger.exception("Error creando producto")
-            return Response({"error":"Error interno al crear producto"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # ✅ CORRECTO: usar data=request.data
+            serializer = ProductSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                product = serializer.save()
+                return Response(
+                    ProductSerializer(product).data,
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class ProductoDetailView(APIView):
@@ -199,265 +214,98 @@ class ProductImageUploadView(APIView):
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.prefetch_related('variants', 'images', 'categoria').all()
+    serializer_class = ProductSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_serializer_class(self):
-        if self.action == "list":
-            return ProductListSerializer
-        return ProductDetailSerializer
-
-    @transaction.atomic
+    permission_classes = [AllowAny]
+    
     def create(self, request, *args, **kwargs):
-        """
-        Crear producto con variantes e imágenes
+        import logging
+        logger = logging.getLogger(__name__)
         
-        Form-data esperado:
-        - name: string (requerido)
-        - description: string
-        - price: decimal (requerido)
-        - categoria: integer (requerido)
-        - active: boolean (default: true)
-        - variants: JSON string array (REQUERIDO - al menos 1 variante)
-          Ejemplo: [{"size":"M","color":"Azul","stock":10}]
-        - images: file[] (opcional, múltiples archivos)
-        """
-        print("\n" + "="*100)
-        print("🔍 CREATE PRODUCTO - INICIO")
-        print("="*100)
-        print(f"📥 Request.data keys: {list(request.data.keys())}")
-        print(f"📥 Request.FILES keys: {list(request.FILES.keys())}")
-        
-        # ========== VALIDAR DATOS BÁSICOS ==========
-        errors = {}
-        
-        # Nombre
-        name = request.data.get('name')
-        if not name or not str(name).strip():
-            errors['name'] = ['El nombre del producto es requerido']
-        
-        # Precio
-        price = request.data.get('price')
-        if not price:
-            errors['price'] = ['El precio es requerido']
-        else:
-            try:
-                price = float(price)
-                if price <= 0:
-                    errors['price'] = ['El precio debe ser mayor a 0']
-            except (ValueError, TypeError):
-                errors['price'] = ['Precio inválido']
-        
-        # Categoría
-        categoria_id = request.data.get('categoria')
-        if not categoria_id:
-            errors['categoria'] = ['La categoría es requerida']
-        else:
-            try:
-                categoria = Categoria.objects.get(id=int(categoria_id))
-                print(f"✅ Categoría: {categoria.nombre} (ID: {categoria.id})")
-            except Categoria.DoesNotExist:
-                errors['categoria'] = [f'Categoría con ID {categoria_id} no existe']
-            except (ValueError, TypeError):
-                errors['categoria'] = ['ID de categoría inválido']
-        
-        # Variantes (CRÍTICO)
-        variants_raw = request.data.get('variants')
-        print(f"\n🔍 Variantes recibidas (raw): {repr(variants_raw)}")
-        print(f"🔍 Tipo de variantes: {type(variants_raw)}")
-        
-        if not variants_raw:
-            errors['variants'] = ['Debe incluir al menos una variante (size, color, stock)']
-        else:
-            # Intentar parsear variantes
-            try:
-                if isinstance(variants_raw, str):
-                    # Si viene como string JSON
-                    variants_data = json.loads(variants_raw)
-                elif isinstance(variants_raw, list):
-                    # Si ya viene como lista (parser JSONParser)
-                    variants_data = variants_raw
-                else:
-                    raise ValueError(f"Formato de variantes inválido: {type(variants_raw)}")
-                
-                print(f"✅ Variantes parseadas: {variants_data}")
-                print(f"✅ Cantidad de variantes: {len(variants_data)}")
-                
-                if not isinstance(variants_data, list) or len(variants_data) == 0:
-                    errors['variants'] = ['Debe incluir al menos una variante']
-                else:
-                    # Validar estructura de cada variante
-                    for idx, v in enumerate(variants_data):
-                        print(f"\n🔹 Validando variante {idx + 1}: {v}")
-                        if not isinstance(v, dict):
-                            errors['variants'] = [f'Variante {idx + 1} tiene formato inválido']
-                            break
-                        # Opcional: validar campos específicos
-                        if 'size' not in v and 'color' not in v:
-                            errors['variants'] = [f'Variante {idx + 1} debe tener al menos size o color']
-                            break
-                        
-            except json.JSONDecodeError as e:
-                print(f"❌ Error parseando JSON: {str(e)}")
-                errors['variants'] = [f'JSON de variantes inválido: {str(e)}']
-                variants_data = None
-            except Exception as e:
-                print(f"❌ Error procesando variantes: {str(e)}")
-                errors['variants'] = [f'Error procesando variantes: {str(e)}']
-                variants_data = None
-        
-        # Si hay errores, retornar antes de crear nada
-        if errors:
-            print(f"\n❌ ERRORES DE VALIDACIÓN:")
-            for field, errs in errors.items():
-                print(f"   - {field}: {errs}")
-            return Response(
-                {'errors': errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # ========== CREAR PRODUCTO ==========
         try:
-            product = Product.objects.create(
-                name=str(name).strip(),
-                description=str(request.data.get('description', '')).strip(),
-                price=price,
-                categoria=categoria,
-                active=request.data.get('active', 'true').lower() in ['true', '1', 'yes', 'on', True]
-            )
-            print(f"\n✅ PRODUCTO CREADO:")
-            print(f"   - ID: {product.id}")
-            print(f"   - Nombre: {product.name}")
-            print(f"   - Precio: ${product.price}")
-            print(f"   - Categoría: {product.categoria.nombre}")
-            print(f"   - Activo: {product.active}")
+            logger.info("=== INICIO CREATE PRODUCTO ===")
+            logger.info(f"request.data: {request.data}")
+            logger.info(f"request.FILES: {request.FILES}")
+            logger.info(f"Content-Type: {request.content_type}")
             
-        except Exception as e:
-            print(f"❌ Error creando producto: {str(e)}")
-            return Response(
-                {'error': f'Error al crear producto: {str(e)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # ========== CREAR VARIANTES ==========
-        variants_created = []
-        try:
-            print(f"\n📦 CREANDO {len(variants_data)} VARIANTE(S)...")
+            # Obtener y parsear variantes
+            variants_raw = request.data.get('variants')
+            logger.info(f"variants_raw recibido: {variants_raw} (tipo: {type(variants_raw)})")
             
-            for idx, variant_data in enumerate(variants_data):
-                print(f"\n🔹 Procesando variante {idx + 1}:")
-                print(f"   Data recibida: {variant_data}")
-                
-                # Extraer datos con valores por defecto seguros
-                size = variant_data.get('size', None)
-                color = variant_data.get('color', None)
-                model_name = variant_data.get('model_name', None)
-                
-                # Stock: forzar a entero, mínimo 2
-                stock_raw = variant_data.get('stock', 2)
-                try:
-                    stock = int(stock_raw)
-                    if stock < 0:
-                        stock = 0
-                        print(f"   ⚠️ Stock negativo ajustado a 0")
-                except (ValueError, TypeError):
-                    stock = 2
-                    print(f"   ⚠️ Stock inválido '{stock_raw}', usando default: 2")
-                
-                # Precio de variante (opcional, hereda del producto si no viene)
-                variant_price = variant_data.get('price')
-                if variant_price:
-                    try:
-                        variant_price = float(variant_price)
-                        print(f"   ℹ️ Precio específico: ${variant_price}")
-                    except (ValueError, TypeError):
-                        variant_price = None
-                        print(f"   ⚠️ Precio inválido, heredará del producto")
-                
-                # No manejamos SKU desde el backend aquí
-                sku = None
-                
-                # CREAR VARIANTE
-                variant = ProductVariant.objects.create(
-                    product=product,
-                    sku=sku,
-                    size=size,
-                    color=color,
-                    model_name=model_name,
-                    price=variant_price,
-                    stock=stock
+            if not variants_raw:
+                return Response(
+                    {'error': 'Debe incluir al menos una variante'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-                
-                variants_created.append(variant)
-                print(f"   ✅ VARIANTE CREADA:")
-                print(f"      - ID: {variant.id}")
-                print(f"      - Talla: {variant.size or 'N/A'}")
-                print(f"      - Color: {variant.color or 'N/A'}")
-                print(f"      - Stock: {variant.stock}")
-                print(f"      - Precio: ${variant.price or product.price}")
-                print(f"      - Disponible: {'Sí' if variant.stock > 0 else 'No'}")
             
-            print(f"\n✅ TOTAL VARIANTES CREADAS: {len(variants_created)}")
+            # Parsear JSON si es string
+            if isinstance(variants_raw, str):
+                import json
+                try:
+                    variants_data = json.loads(variants_raw)
+                    logger.info(f"variants_data parseado: {variants_data}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parseando variants: {e}")
+                    return Response(
+                        {'error': f'JSON de variantes inválido: {str(e)}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                variants_data = variants_raw
             
-        except Exception as e:
-            print(f"\n❌ ERROR CRÍTICO CREANDO VARIANTES:")
-            print(f"   {str(e)}")
-            import traceback
-            traceback.print_exc()
+            # Crear diccionario con todos los datos
+            data = {
+                'name': request.data.get('name'),
+                'description': request.data.get('description', ''),
+                'cost_price': request.data.get('cost_price'),
+                'price': request.data.get('price'),
+                'categoria': request.data.get('categoria'),
+                'active': request.data.get('active', 'true').lower() == 'true',
+                'variants': variants_data
+            }
             
-            # Rollback: eliminar producto
-            product.delete()
-            return Response(
-                {'error': f'Error al crear variantes: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        
-        # ========== SUBIR IMÁGENES ==========
-        images_created = []
-        files = request.FILES.getlist('images')
-        
-        if files:
-            print(f"\n🖼️ PROCESANDO {len(files)} IMAGEN(ES)...")
+            logger.info(f"Datos a serializar: {data}")
+            
+            # Serializar y validar
+            serializer = self.get_serializer(data=data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            
+            logger.info("Serializer validado correctamente")
+            
+            # Guardar producto
+            product = serializer.save()
+            logger.info(f"Producto guardado: ID {product.id}")
+            
+            # Procesar imágenes
+            files = request.FILES.getlist('images')
+            logger.info(f"Procesando {len(files)} imágenes")
             
             for idx, file in enumerate(files):
-                try:
-                    # Validar tamaño (5MB máx)
-                    if file.size > 5 * 1024 * 1024:
-                        print(f"   ⚠️ Imagen {idx+1} demasiado grande ({file.size / 1024 / 1024:.2f}MB), omitida")
-                        continue
-                    
-                    image = ProductImage.objects.create(
-                        product=product,
-                        image=file,
-                        is_main=(idx == 0),
-                        order=idx
-                    )
-                    images_created.append(image)
-                    print(f"   ✅ Imagen {idx+1} subida: {image.image.url if image.image else 'No URL'}")
-                    
-                except Exception as e:
-                    print(f"   ❌ Error subiendo imagen {idx+1}: {str(e)}")
+                logger.info(f"Subiendo imagen {idx}: {file.name}")
+                ProductImage.objects.create(
+                    product=product,
+                    image=file,
+                    is_main=(idx == 0),
+                    order=idx
+                )
             
-            print(f"✅ TOTAL IMÁGENES SUBIDAS: {len(images_created)}")
-        else:
-            print("\n⚠️ No se recibieron imágenes")
-        
-        # ========== RESPUESTA FINAL ==========
-        product.refresh_from_db()
-        response_data = ProductDetailSerializer(product).data
-        
-        print("\n" + "="*100)
-        print("✅ PRODUCTO CREADO EXITOSAMENTE")
-        print("="*100)
-        print(f"📦 Producto ID: {response_data['id']}")
-        print(f"📦 Nombre: {response_data['name']}")
-        print(f"📦 Variantes: {len(response_data.get('variants', []))}")
-        print(f"📦 Imágenes: {len(response_data.get('images', []))}")
-        print(f"📦 Stock total: {response_data.get('total_stock', 0)}")
-        print(f"📦 Disponible: {'Sí' if response_data.get('is_available', False) else 'No'}")
-        print("="*100 + "\n")
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
+            logger.info("=== FIN CREATE PRODUCTO (ÉXITO) ===")
+            
+            # Retornar respuesta con producto completo
+            return Response(
+                ProductSerializer(product, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
+            
+        except serializers.ValidationError as e:
+            logger.error(f"Error de validación: {e.detail}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error inesperado: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error interno: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
@@ -774,3 +622,50 @@ class ProductImageViewSet(viewsets.ModelViewSet):
             ProductImageSerializer(image).data,
             status=status.HTTP_201_CREATED
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def inventory_list(request):
+    """
+    Listado de inventario con filtros
+    """
+    queryset = ProductVariant.objects.select_related('product', 'product__categoria').all()
+    
+    # Filtros opcionales
+    search = request.GET.get('search', '')
+    categoria = request.GET.get('categoria', '')
+    stock_bajo = request.GET.get('stock_bajo', '')
+    
+    if search:
+        queryset = queryset.filter(
+            Q(product__name__icontains=search) |
+            Q(sku__icontains=search) |
+            Q(size__icontains=search) |
+            Q(color__icontains=search)
+        )
+    
+    if categoria:
+        queryset = queryset.filter(product__categoria_id=categoria)
+    
+    if stock_bajo == 'true':
+        queryset = queryset.filter(stock__lt=5, stock__gt=0)
+    
+    # Serializar datos
+    data = []
+    for variante in queryset:
+        data.append({
+            'id': variante.id,
+            'producto': variante.product.name,
+            'sku': variante.sku or '',
+            'talla': variante.size or '',
+            'color': variante.color or '',
+            'stock': variante.stock,
+            'precio_venta': str(variante.get_sale_price()),
+            'precio_costo': str(variante.get_cost_price()),
+            'categoria': variante.product.categoria.nombre if variante.product.categoria else '',
+            'is_low_stock': variante.is_low_stock,
+            'is_available': variante.is_available
+        })
+    
+    return Response(data)

@@ -1,145 +1,258 @@
-from django.db import transaction
-from productos.models import Product
 from rest_framework import serializers
-from .models import Pedido, PedidoItem, Venta, DetalleVenta
-from productos.models import ProductVariant
+from django.db import transaction
+from .models import MetodoPago, Pedido, PedidoItem, Venta, DetalleVenta, MovimientoInventario
+from productos.models import Product, ProductVariant
+
+
+class MetodoPagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MetodoPago
+        fields = ['id', 'nombre', 'activo', 'requiere_comprobante', 'descripcion', 'icono']
 
 
 class PedidoItemSerializer(serializers.ModelSerializer):
-    subtotal = serializers.SerializerMethodField()
+    """Serializer para items del pedido"""
     
     class Meta:
         model = PedidoItem
-        fields = ['idItem', 'producto', 'variante', 'nombre', 'cantidad', 'precio', 'subtotal']
-    
-    def get_subtotal(self, obj):
-        return obj.subtotal()
+        fields = [
+            'idItem', 'producto', 'variante', 
+            'nombre_completo', 'sku',
+            'cantidad', 'precio_unitario', 'subtotal',
+            'stock_reservado'
+        ]
+        read_only_fields = ['idItem', 'subtotal', 'stock_reservado']
 
 
 class PedidoSerializer(serializers.ModelSerializer):
+    """Serializer para pedidos"""
     items = PedidoItemSerializer(many=True, read_only=True)
-    items_count = serializers.SerializerMethodField()
+    metodo_pago_info = MetodoPagoSerializer(source='metodo_pago', read_only=True)
     
     class Meta:
         model = Pedido
         fields = [
-            'idPedido', 'cliente', 'total', 'metodo_pago', 
-            'datos_cliente', 'recoger_hasta', 'estado',
-            'fecha_creacion', 'fecha_actualizacion', 
-            'items', 'items_count'
+            'idPedido', 'cliente', 'datos_cliente',
+            'subtotal', 'descuento', 'total',
+            'estado', 'metodo_pago', 'metodo_pago_info',
+            'comprobante_pago', 'fecha_pago',
+            'fecha_creacion', 'fecha_actualizacion', 'fecha_expiracion',
+            'observaciones', 'ip_cliente',
+            'items'
         ]
+        read_only_fields = ['idPedido', 'fecha_creacion', 'fecha_actualizacion']
+
+
+class CrearPedidoSerializer(serializers.Serializer):
+    """Serializer para crear un pedido completo"""
+    datos_cliente = serializers.JSONField()
+    items = serializers.ListField()
+    metodo_pago_id = serializers.IntegerField()
+    observaciones = serializers.CharField(max_length=500, required=False, allow_blank=True)
     
-    def get_items_count(self, obj):
-        return obj.items.count()
+    def validate_items(self, value):
+        """Validar que los items tengan la estructura correcta"""
+        if not value:
+            raise serializers.ValidationError("Debe incluir al menos un producto")
+        
+        for item in value:
+            # Validar campos requeridos
+            required_fields = ['producto_id', 'variante_id', 'cantidad', 'precio']
+            for field in required_fields:
+                if field not in item:
+                    raise serializers.ValidationError(f"Falta el campo '{field}' en un item")
+            
+            # Validar tipos
+            try:
+                item['cantidad'] = int(item['cantidad'])
+                item['precio'] = float(item['precio'])
+                if item['cantidad'] <= 0:
+                    raise serializers.ValidationError("La cantidad debe ser mayor a 0")
+                if item['precio'] <= 0:
+                    raise serializers.ValidationError("El precio debe ser mayor a 0")
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("Cantidad y precio deben ser números")
+        
+        return value
+    
+    def validate_metodo_pago_id(self, value):
+        """Validar que el método de pago existe y está activo"""
+        try:
+            metodo = MetodoPago.objects.get(id=value, activo=True)
+            return value
+        except MetodoPago.DoesNotExist:
+            raise serializers.ValidationError("Método de pago inválido o inactivo")
+    
+    @transaction.atomic
+    def create(self, validated_data):
+        """Crear pedido con items y reservar stock"""
+        user = self.context['request'].user
+        
+        # Crear pedido
+        pedido = Pedido.objects.create(
+            cliente=user if user.is_authenticated else None,
+            datos_cliente=validated_data['datos_cliente'],
+            metodo_pago_id=validated_data['metodo_pago_id'],
+            observaciones=validated_data.get('observaciones', ''),
+            ip_cliente=self.context['request'].META.get('REMOTE_ADDR')
+        )
+        
+        # Procesar items
+        subtotal = 0
+        for item_data in validated_data['items']:
+            # Obtener producto y variante
+            try:
+                producto = Product.objects.get(id=item_data['producto_id'])
+                variante = ProductVariant.objects.get(id=item_data['variante_id'])
+            except (Product.DoesNotExist, ProductVariant.DoesNotExist):
+                raise serializers.ValidationError("Producto o variante no encontrado")
+            
+            # Validar stock
+            cantidad = item_data['cantidad']
+            if variante.stock < cantidad:
+                raise serializers.ValidationError(
+                    f"Stock insuficiente para {producto.name} ({variante.size}). "
+                    f"Disponible: {variante.stock}, Solicitado: {cantidad}"
+                )
+            
+            # RESERVAR STOCK (reducir inmediatamente)
+            variante.reduce_stock(
+                quantity=cantidad, 
+                pedido=pedido, 
+                usuario=user if user.is_authenticated else None
+            )
+            
+            # Crear item del pedido
+            precio_unitario = item_data['precio']
+            item_subtotal = cantidad * precio_unitario
+            
+            nombre_completo = f"{producto.name}"
+            if variante.size:
+                nombre_completo += f" - {variante.size}"
+            if variante.color:
+                nombre_completo += f" - {variante.color}"
+            
+            PedidoItem.objects.create(
+                pedido=pedido,
+                producto=producto,
+                variante=variante,
+                nombre_completo=nombre_completo,
+                sku=variante.sku or '',
+                cantidad=cantidad,
+                precio_unitario=precio_unitario,
+                subtotal=item_subtotal,
+                stock_reservado=True
+            )
+            
+            subtotal += item_subtotal
+        
+        # Actualizar totales del pedido
+        pedido.subtotal = subtotal
+        pedido.total = subtotal - pedido.descuento
+        pedido.save()
+        
+        return pedido
 
 
 class DetalleVentaSerializer(serializers.ModelSerializer):
-    """Detalle de venta CON cálculo de ganancia"""
-    producto_nombre = serializers.CharField(source='producto.name', read_only=True)
-    costo_unitario = serializers.SerializerMethodField()
-    ganancia_unitaria = serializers.SerializerMethodField()
-    ganancia_total = serializers.SerializerMethodField()
-    margen_porcentaje = serializers.SerializerMethodField()
-    
     class Meta:
         model = DetalleVenta
         fields = [
-            'id', 'producto', 'producto_nombre',
-            'cantidad', 
-            'precio_unitario',  # Precio de VENTA
-            'costo_unitario',   # Precio de COSTO
-            'subtotal',         # Ingresos totales
-            'ganancia_unitaria', 'ganancia_total', 'margen_porcentaje',
-            'created_at'
+            'id', 'producto', 'variante',
+            'nombre_completo', 'sku', 'categoria_nombre',
+            'cantidad', 'precio_unitario', 'subtotal',
+            'costo_unitario', 'costo_total',
+            'ganancia_unitaria', 'ganancia_total', 'margen_porcentaje'
         ]
-    
-    def get_costo_unitario(self, obj):
-        """Obtiene el costo del producto al momento de la venta"""
-        # Aquí deberías guardar el costo en el momento de la venta
-        # Por ahora, lo obtenemos del producto actual
-        return str(obj.producto.cost_price)
-    
-    def get_ganancia_unitaria(self, obj):
-        """Ganancia por unidad = precio_venta - costo"""
-        costo = obj.producto.cost_price
-        return str(obj.precio_unitario - costo)
-    
-    def get_ganancia_total(self, obj):
-        """Ganancia total = (precio_venta - costo) * cantidad"""
-        costo = obj.producto.cost_price
-        ganancia_unitaria = obj.precio_unitario - costo
-        return str(ganancia_unitaria * obj.cantidad)
-    
-    def get_margen_porcentaje(self, obj):
-        """Margen de ganancia en %"""
-        costo = obj.producto.cost_price
-        if costo > 0:
-            margen = ((obj.precio_unitario - costo) / costo) * 100
-            return round(float(margen), 2)
-        return 0
 
 
 class VentaSerializer(serializers.ModelSerializer):
     items = DetalleVentaSerializer(many=True, read_only=True)
-    usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
-    total_ganancia = serializers.SerializerMethodField()
-    total_costo = serializers.SerializerMethodField()
-    margen_promedio = serializers.SerializerMethodField()
+    metodo_pago_info = MetodoPagoSerializer(source='metodo_pago', read_only=True)
+    pedido_info = PedidoSerializer(source='pedido', read_only=True)
     
     class Meta:
         model = Venta
         fields = [
-            'id', 'usuario', 'usuario_nombre', 'fecha',
-            'total',  # Ingresos totales
-            'total_costo', 'total_ganancia', 'margen_promedio',
-            'items'
+            'id', 'pedido', 'pedido_info',
+            'usuario_vendedor', 'cliente', 'datos_cliente',
+            'subtotal', 'descuento', 'total',
+            'costo_total', 'ganancia_total', 'margen_porcentaje',
+            'metodo_pago', 'metodo_pago_info', 'comprobante_pago',
+            'estado', 'fecha', 'fecha_anulacion', 'motivo_anulacion',
+            'ip_cliente', 'items'
         ]
-    
-    def get_total_costo(self, obj):
-        """Suma de costos de todos los items"""
-        total = sum(
-            item.producto.cost_price * item.cantidad 
-            for item in obj.items.all()
-        )
-        return str(total)
-    
-    def get_total_ganancia(self, obj):
-        """Ganancia total = ingresos - costos"""
-        total_ingresos = obj.total
-        total_costos = sum(
-            item.producto.cost_price * item.cantidad 
-            for item in obj.items.all()
-        )
-        return str(total_ingresos - total_costos)
-    
-    def get_margen_promedio(self, obj):
-        """Margen promedio ponderado por ingresos"""
-        total_ingresos = float(obj.total)
-        total_costos = sum(
-            float(item.producto.cost_price) * item.cantidad 
-            for item in obj.items.all()
-        )
-        if total_costos > 0:
-            margen = ((total_ingresos - total_costos) / total_costos) * 100
-            return round(margen, 2)
-        return 0
 
 
-class YourSerializer(serializers.Serializer):
-    # Your serializer fields here
-
+class ConfirmarPedidoSerializer(serializers.Serializer):
+    """Confirmar pedido (crear venta)"""
+    comprobante_pago = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    
+    @transaction.atomic
     def create(self, validated_data):
-        from django.db import transaction
-        from productos.models import Product
+        """Convertir pedido en venta"""
+        pedido = self.context['pedido']
+        user = self.context['request'].user
+        
+        if pedido.estado != 'PENDIENTE':
+            raise serializers.ValidationError("El pedido ya fue procesado")
+        
+        # Calcular costos totales
+        costo_total = 0
+        for item in pedido.items.all():
+            costo_unitario = item.variante.get_cost_price() if item.variante else item.producto.cost_price
+            costo_total += item.cantidad * costo_unitario
+        
+        ganancia_total = pedido.total - costo_total
+        margen_porcentaje = (ganancia_total / costo_total * 100) if costo_total > 0 else 0
+        
+        # Crear venta
+        venta = Venta.objects.create(
+            pedido=pedido,
+            usuario_vendedor=user,
+            cliente=pedido.cliente,
+            datos_cliente=pedido.datos_cliente,
+            subtotal=pedido.subtotal,
+            descuento=pedido.descuento,
+            total=pedido.total,
+            costo_total=costo_total,
+            ganancia_total=ganancia_total,
+            margen_porcentaje=margen_porcentaje,
+            metodo_pago=pedido.metodo_pago,
+            comprobante_pago=validated_data.get('comprobante_pago', ''),
+            ip_cliente=pedido.ip_cliente
+        )
+        
+        # Crear detalles de venta
+        for item in pedido.items.all():
+            costo_unitario = item.variante.get_cost_price() if item.variante else item.producto.cost_price
+            
+            DetalleVenta.objects.create(
+                venta=venta,
+                producto=item.producto,
+                variante=item.variante,
+                nombre_completo=item.nombre_completo,
+                sku=item.sku,
+                categoria_nombre=item.producto.categoria.nombre if item.producto.categoria else '',
+                cantidad=item.cantidad,
+                precio_unitario=item.precio_unitario,
+                costo_unitario=costo_unitario
+            )
+        
+        # Actualizar estado del pedido
+        pedido.estado = 'PAGADO'
+        pedido.fecha_pago = timezone.now()
+        pedido.comprobante_pago = validated_data.get('comprobante_pago', '')
+        pedido.save()
+        
+        return venta
 
-        with transaction.atomic():
-            # Your create logic here
-            pid = validated_data.get('product_id')
-            if pid:
-                try:
-                    producto_obj = Product.objects.get(pk=pid)
-                except Product.DoesNotExist:
-                    producto_obj = None
 
-        # Return the created object or any other relevant data
-        return producto_obj
+class MovimientoInventarioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MovimientoInventario
+        fields = [
+            'id', 'tipo', 'variante', 'pedido', 'venta',
+            'cantidad', 'stock_anterior', 'stock_nuevo',
+            'usuario', 'observaciones', 'fecha'
+        ]

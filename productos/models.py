@@ -155,22 +155,3 @@ class ProductVariant(models.Model):
             parts.append(f"Color {self.color}")
         status = f"Stock: {self.stock}"
         return f"{' - '.join(parts)} ({status})"
-
-
-class InventoryMovement(models.Model):
-    """Registro de movimientos de inventario para auditoría"""
-    id = models.AutoField(primary_key=True)
-    variant = models.ForeignKey(ProductVariant, related_name='movimientos', on_delete=models.CASCADE)
-    usuario = models.ForeignKey('usuarios.Usuario', null=True, blank=True, on_delete=models.SET_NULL)
-    previous_stock = models.IntegerField()
-    new_stock = models.IntegerField()
-    delta = models.IntegerField()
-    motivo = models.CharField(max_length=255, blank=True, null=True)
-    fecha = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'inventory_movement'
-        ordering = ['-fecha']
-
-    def __str__(self):
-        return f"Movimiento variante {self.variant_id}: {self.previous_stock} -> {self.new_stock} ({self.delta})"

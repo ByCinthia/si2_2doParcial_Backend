@@ -109,3 +109,69 @@ class InventoryVariantSerializer(serializers.ModelSerializer):
     
     def get_cost_price(self, obj):
         return str(obj.get_cost_price())
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    variants = ProductVariantSerializer(many=True, required=False)
+    images = ProductImageSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'description', 'cost_price', 'price',
+            'categoria', 'active', 'created_at', 'updated_at',
+            'variants', 'images', 'total_stock', 'is_available'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'total_stock', 'is_available']
+    
+    def create(self, validated_data):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # 🔍 Log para debug
+            logger.info(f"validated_data recibido: {validated_data}")
+            
+            # Extraer variantes
+            variants_data = validated_data.pop('variants', [])
+            
+            # Si no vinieron en validated_data, intentar desde context
+            if not variants_data:
+                request = self.context.get('request')
+                if request:
+                    variants_raw = request.data.get('variants')
+                    if isinstance(variants_raw, str):
+                        import json
+                        variants_data = json.loads(variants_raw)
+                    elif isinstance(variants_raw, list):
+                        variants_data = variants_raw
+            
+            logger.info(f"variants_data procesado: {variants_data}")
+            
+            if not variants_data:
+                raise serializers.ValidationError({
+                    'variants': 'Debe incluir al menos una variante'
+                })
+            
+            # Crear producto
+            product = Product.objects.create(**validated_data)
+            logger.info(f"Producto creado: {product.id}")
+            
+            # Crear variantes
+            for idx, variant_data in enumerate(variants_data):
+                logger.info(f"Creando variante {idx}: {variant_data}")
+                
+                # Limpiar valores None
+                variant_clean = {k: v for k, v in variant_data.items() if v is not None}
+                
+                ProductVariant.objects.create(
+                    product=product,
+                    **variant_clean
+                )
+            
+            logger.info(f"Producto {product.id} creado con {len(variants_data)} variantes")
+            return product
+            
+        except Exception as e:
+            logger.error(f"Error al crear producto: {str(e)}", exc_info=True)
+            raise

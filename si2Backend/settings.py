@@ -194,7 +194,7 @@ REST_FRAMEWORK = {
 
 # Simple JWT Configuration
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),  # Duración del token de acceso
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Duración del token de acceso
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),      # Duración del token de refresco
     'ROTATE_REFRESH_TOKENS': True,                    # Genera nuevo refresh token al refrescar
     'BLACKLIST_AFTER_ROTATION': True,                 # Invalida el refresh token anterior
