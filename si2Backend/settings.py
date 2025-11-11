@@ -65,21 +65,23 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
-    'cloudinary_storage',
     'cloudinary',
-   # 'corsheaders',   # <-- agregado
+    'cloudinary_storage',
+    'corsheaders',  # <- SOLO AQUI, una sola vez
     'usuarios',
-    'productos',  # nueva app
-    'categorias',  # app de categorías añadida
+    'productos',
+    'categorias',
     'ventas',
 ]
 
 # ya se añadieron arriba 'cloudinary' y 'cloudinary_storage' — no repetirlos
 
 if USE_CORS:
-    INSTALLED_APPS.insert(0, 'corsheaders')  # opcional: añadir al inicio
+    # NO añadir corsheaders aquí de nuevo — ya está arriba
+    pass
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # debe ir primero
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -88,10 +90,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-if USE_CORS:
-    # corsheaders debe ir antes de CommonMiddleware
-    MIDDLEWARE.insert(1, 'corsheaders.middleware.CorsMiddleware')
 
 ROOT_URLCONF = 'si2Backend.urls'
 

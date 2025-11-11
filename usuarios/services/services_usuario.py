@@ -8,6 +8,8 @@ from usuarios.models import Usuario, Rol
 from usuarios.serializers import (
     UsuarioDetailSerializer,
     UsuarioCreateSerializer,
+    UsuarioSerializer,  # ← FALTABA
+    UsuarioLoginSerializer,  # ← FALTABA
 )
 
 
@@ -30,53 +32,6 @@ class UsuarioService:
         return False
 
     @staticmethod
-    def crear_usuario(data, creado_por=None):
-        """
-        Crea un usuario (cliente o trabajador).
-        - creado_por: instancia Usuario que realiza la creación (para auditoría y permisos).
-        """
-        try:
-            # role must be provided (idRol or nombre)
-            rol_id = data.get('rol') or data.get('rol_id')
-            if not rol_id:
-                return False, {"error": "Debe especificar el rol (campo 'rol')"}, 400
-
-            # obtener rol
-            try:
-                # aceptar id numeric o nombre
-                if isinstance(rol_id, int) or (isinstance(rol_id, str) and rol_id.isdigit()):
-                    rol_obj = Rol.objects.get(idRol=int(rol_id))
-                else:
-                    rol_obj = Rol.objects.get(nombre=rol_id)
-            except Rol.DoesNotExist:
-                return False, {"error": "Rol especificado no existe"}, 400
-
-            # verificar permisos del creador
-            if creado_por:
-                if not UsuarioService._puede_crear_rol(creado_por, rol_obj):
-                    return False, {"error": "No tienes permisos para crear usuarios con ese rol"}, 403
-            else:
-                # sin creador, no permitimos creación (no hay registro público)
-                return False, {"error": "Creación de usuarios sólo permitida por personal autorizado"}, 401
-
-            # preparar datos para el serializer (forzar rol correcto)
-            payload = data.copy()
-            payload['rol'] = rol_obj.idRol
-            payload['activo'] = payload.get('activo', True)
-
-            serializer = UsuarioCreateSerializer(data=payload)
-            if not serializer.is_valid():
-                return False, {"errors": serializer.errors}, 400
-
-            usuario = serializer.save()
-            return True, {"message": "Usuario creado", "usuario": UsuarioDetailSerializer(usuario).data}, 201
-
-        except IntegrityError as e:
-            return False, {"error": "Error de integridad: " + str(e)}, 400
-        except Exception as e:
-            return False, {"error": "Error interno: " + str(e)}, 500
-
-    @staticmethod
     def listar_usuarios():
         """
         Lista todos los usuarios
@@ -85,7 +40,7 @@ class UsuarioService:
         """
         try:
             usuarios = Usuario.objects.select_related('rol').all()
-            serializer = UsuarioSerializer(usuarios, many=True)
+            serializer = UsuarioDetailSerializer(usuarios, many=True)
             return True, serializer.data, 200
         except Exception as e:
             return False, {"error": f"Error al listar usuarios: {str(e)}"}, 500
@@ -109,35 +64,55 @@ class UsuarioService:
             return False, {"error": f"Error al obtener usuario: {str(e)}"}, 500
     
     @staticmethod
-    def crear_usuario(data):
+    def crear_usuario(data, creado_por=None):
         """
-        Crea un nuevo usuario
-        Args:
-            data: Datos del usuario a crear
-        Returns:
-            tuple: (success, data/error, status_code)
+        Crea un usuario (cliente o trabajador).
+        - creado_por: instancia Usuario que realiza la creación (para auditoría y permisos).
         """
         try:
-            # Validar que el rol exista
-            rol_id = data.get('idRol')
-            if not Rol.objects.filter(idRol=rol_id).exists():
-                return False, {"error": "El rol especificado no existe"}, 400
-            
-            serializer = UsuarioCreateSerializer(data=data)
-            if serializer.is_valid():
-                # El serializer ya maneja la creación correctamente
-                usuario = serializer.save()
-                response_serializer = UsuarioDetailSerializer(usuario)
-                return True, response_serializer.data, 201
-            return False, serializer.errors, 400
+            # role must be provided (idRol o nombre)
+            rol_id = data.get('rol') or data.get('rol_id') or data.get('idRol')
+            if not rol_id:
+                return False, {"error": "Debe especificar el rol (campo 'rol' o 'idRol')"}, 400
+
+            # obtener rol
+            try:
+                # aceptar id numeric o nombre
+                if isinstance(rol_id, int) or (isinstance(rol_id, str) and rol_id.isdigit()):
+                    rol_obj = Rol.objects.get(idRol=int(rol_id))
+                else:
+                    rol_obj = Rol.objects.get(nombre=rol_id)
+            except Rol.DoesNotExist:
+                return False, {"error": "Rol especificado no existe"}, 400
+
+            # verificar permisos del creador (solo si se proporciona creado_por)
+            if creado_por:
+                if not UsuarioService._puede_crear_rol(creado_por, rol_obj):
+                    return False, {"error": "No tienes permisos para crear usuarios con ese rol"}, 403
+
+            # preparar datos para el serializer (forzar rol correcto)
+            payload = data.copy()
+            payload['idRol'] = rol_obj.idRol  # Usar idRol en lugar de rol
+            payload['activo'] = payload.get('activo', True)
+
+            serializer = UsuarioCreateSerializer(data=payload)
+            if not serializer.is_valid():
+                return False, {"errors": serializer.errors}, 400
+
+            usuario = serializer.save()
+            return True, {
+                "message": "Usuario creado exitosamente",
+                "usuario": UsuarioDetailSerializer(usuario).data
+            }, 201
+
         except IntegrityError as e:
             if 'username' in str(e):
                 return False, {"error": "El nombre de usuario ya está registrado"}, 400
             elif 'email' in str(e):
                 return False, {"error": "El email ya está registrado"}, 400
-            return False, {"error": "Error de integridad en los datos"}, 400
+            return False, {"error": "Error de integridad: " + str(e)}, 400
         except Exception as e:
-            return False, {"error": f"Error al crear usuario: {str(e)}"}, 500
+            return False, {"error": "Error interno: " + str(e)}, 500
     
     @staticmethod
     def actualizar_usuario(id_usuario, data):

@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 class Pedido(models.Model):
     METODOS_PAGO = (('tarjeta','Tarjeta'), ('efectivo','Efectivo'), ('recoger','Recoger'))
@@ -37,27 +38,32 @@ class PedidoItem(models.Model):
 
 
 class Venta(models.Model):
-    ESTADOS_VENTA = (('CREADA','Creada'), ('ANULADA','Anulada'), ('FINALIZADA','Finalizada'))
-    idVenta = models.AutoField(primary_key=True)
-    pedido = models.OneToOneField(Pedido, null=True, blank=True, on_delete=models.SET_NULL, related_name='venta')
-    cliente = models.ForeignKey('usuarios.Usuario', null=True, blank=True, on_delete=models.SET_NULL, related_name='ventas')
-    vendedor = models.ForeignKey('usuarios.Usuario', null=True, blank=True, on_delete=models.SET_NULL, related_name='ventas_realizadas')
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ventas')
+    fecha = models.DateTimeField(default=timezone.now)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    fecha = models.DateTimeField(auto_now_add=True)
-    estado = models.CharField(max_length=20, choices=ESTADOS_VENTA, default='CREADA')
+
+    class Meta:
+        db_table = 'ventas_venta'
+        ordering = ['-fecha']
 
     def __str__(self):
-        return f"Venta {self.idVenta} - {self.fecha}"
+        return f'Venta {self.id} - {self.usuario} - {self.total}'
 
-
-class VentaItem(models.Model):
-    idItem = models.AutoField(primary_key=True)
+class DetalleVenta(models.Model):
     venta = models.ForeignKey(Venta, related_name='items', on_delete=models.CASCADE)
-    producto = models.ForeignKey('productos.Product', null=True, blank=True, on_delete=models.SET_NULL)
-    variante = models.ForeignKey('productos.ProductVariant', null=True, blank=True, on_delete=models.SET_NULL)
-    nombre = models.CharField(max_length=255)
+    producto = models.ForeignKey('productos.Product', on_delete=models.PROTECT)
     cantidad = models.PositiveIntegerField()
-    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)  # precio de venta por unidad
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)  # cantidad * precio_unitario
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    def subtotal(self):
-        return self.cantidad * self.precio_unitario
+    class Meta:
+        db_table = 'ventas_detalleventa'
+
+    def save(self, *args, **kwargs):
+        # calcular subtotal a partir de cantidad y precio_unitario siempre
+        self.subtotal = self.cantidad * self.precio_unitario
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Item {self.id} - Venta {self.venta_id} - Prod {self.producto_id}'

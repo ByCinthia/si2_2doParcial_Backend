@@ -4,9 +4,10 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .services import VentaService
-from .models import Pedido, PedidoItem
+from .models import Pedido, PedidoItem, Venta, DetalleVenta
 
 class PedidoListCreateView(APIView):
     # exigir autenticación para acceder a pedidos
@@ -52,9 +53,13 @@ class PedidoListCreateView(APIView):
         # crear items; aceptamos product_id opcional (asignando producto_id) y snapshot de nombre/precio
         for it in items:
             product_id = it.get('producto_id')
+            # aceptar variantes con distintos nombres posibles desde el frontend
+            variant_id = it.get('variante_id') or it.get('variant_id') or it.get('variante')
+
             PedidoItem.objects.create(
                 pedido=pedido,
                 producto_id=product_id if product_id else None,
+                variante_id=int(variant_id) if variant_id else None,
                 nombre=it.get('nombre', '')[:255],
                 cantidad=it.get('cantidad', 1),
                 precio=it.get('precio', 0)
@@ -102,7 +107,7 @@ class ConfirmarPedidoView(APIView):
             ok, result = VentaService.confirmar_pedido(id_pedido, usuario_vendedor=request.user, pago_info=request.data.get('pago'))
             if not ok:
                 return Response({"error": str(result)}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({"venta_id": result.idVenta}, status=status.HTTP_201_CREATED)
+            return Response({"venta_id": result.id}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -143,7 +148,7 @@ class VentasReportesView(APIView):
         # Calcular métricas
         total_ventas = ventas_qs.aggregate(
             total=Sum('total'),
-            cantidad=Count('idVenta')
+            cantidad=Count('id')
         )
 
         # Ventas por día (para gráficos)
@@ -151,17 +156,17 @@ class VentasReportesView(APIView):
             select={'dia': 'DATE(fecha)'}
         ).values('dia').annotate(
             total_dia=Sum('total'),
-            cantidad_dia=Count('idVenta')
+            cantidad_dia=Count('id')
         ).order_by('dia')
 
         # Top productos más vendidos
-        from .models import VentaItem
-        productos_top = VentaItem.objects.filter(
+        from .models import DetalleVenta  # Cambiar VentaItem por DetalleVenta
+        productos_top = DetalleVenta.objects.filter(  # Cambiar VentaItem por DetalleVenta
             venta__fecha__date__gte=fecha_inicio,
             venta__fecha__date__lte=fecha_fin
-        ).values('nombre').annotate(
+        ).values('producto__name').annotate(  # Cambiar 'nombre' por 'producto__name'
             total_vendido=Sum('cantidad'),
-            ingresos=Sum('precio_unitario')
+            ingresos=Sum('subtotal')  # Usar 'subtotal' en lugar de 'precio_unitario'
         ).order_by('-total_vendido')[:10]
 
         return Response({
@@ -204,7 +209,7 @@ class VentasComparacionView(APIView):
             fecha__date__lte=actual_fin
         ).aggregate(
             total=Sum('total'),
-            cantidad=Count('idVenta')
+            cantidad=Count('id')
         )
         
         # Ventas período anterior
@@ -213,7 +218,7 @@ class VentasComparacionView(APIView):
             fecha__date__lte=anterior_fin
         ).aggregate(
             total=Sum('total'),
-            cantidad=Count('idVenta')
+            cantidad=Count('id')
         )
         
         # Calcular crecimiento
@@ -240,3 +245,127 @@ class VentasComparacionView(APIView):
                 'ventas_porcentaje': round(crecimiento_cantidad, 2)
             }
         })
+
+class ReportesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        GET /api/ventas/reportes/?periodo=mes
+        
+        Reportes CON análisis de rentabilidad
+        """
+        periodo = request.query_params.get('periodo', 'mes')
+        fecha_inicio = request.query_params.get('fecha_inicio')
+        fecha_fin = request.query_params.get('fecha_fin')
+
+        if fecha_inicio and fecha_fin:
+            inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d')
+            fin = datetime.strptime(fecha_fin, '%Y-%m-%d')
+        else:
+            hoy = timezone.now()
+            if periodo == 'dia':
+                inicio = hoy.replace(hour=0, minute=0, second=0)
+                fin = hoy
+            elif periodo == 'semana':
+                inicio = hoy - timedelta(days=7)
+                fin = hoy
+            elif periodo == 'mes':
+                inicio = hoy.replace(day=1, hour=0, minute=0, second=0)
+                fin = hoy
+            elif periodo == 'trimestre':
+                inicio = hoy - timedelta(days=90)
+                fin = hoy
+            elif periodo == 'año':
+                inicio = hoy.replace(month=1, day=1, hour=0, minute=0, second=0)
+                fin = hoy
+            else:
+                inicio = hoy.replace(day=1, hour=0, minute=0, second=0)
+                fin = hoy
+
+        ventas = Venta.objects.filter(fecha__range=[inicio, fin])
+
+        # Calcular métricas de rentabilidad
+        total_ingresos = ventas.aggregate(Sum('total'))['total__sum'] or 0
+        total_ventas = ventas.count()
+
+        # Calcular costos totales
+        total_costos = 0
+        for venta in ventas:
+            for item in venta.items.all():
+                total_costos += float(item.producto.cost_price) * item.cantidad
+
+        # Ganancia total
+        total_ganancia = float(total_ingresos) - total_costos
+
+        # Margen promedio
+        margen_promedio = 0
+        if total_costos > 0:
+            margen_promedio = (total_ganancia / total_costos) * 100
+
+        # Productos más rentables (por ganancia total)
+        from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+        from productos.models import Product
+        
+        productos_rentables = DetalleVenta.objects.filter(
+            venta__fecha__range=[inicio, fin]
+        ).values(
+            'producto__id', 'producto__name'
+        ).annotate(
+            cantidad_vendida=Sum('cantidad'),
+            ingresos_totales=Sum('subtotal'),
+            # Aquí deberías tener el costo guardado en DetalleVenta
+            # Por ahora usamos el del producto
+        ).order_by('-ingresos_totales')[:10]
+
+        # Calcular ganancia por producto
+        productos_con_ganancia = []
+        for p in productos_rentables:
+            try:
+                producto = Product.objects.get(id=p['producto__id'])
+                costo_total = float(producto.cost_price) * p['cantidad_vendida']
+                ganancia = float(p['ingresos_totales']) - costo_total
+                margen = (ganancia / costo_total * 100) if costo_total > 0 else 0
+                
+                productos_con_ganancia.append({
+                    'producto_id': p['producto__id'],
+                    'nombre': p['producto__name'],
+                    'cantidad_vendida': p['cantidad_vendida'],
+                    'ingresos': float(p['ingresos_totales']),
+                    'costos': costo_total,
+                    'ganancia': ganancia,
+                    'margen_porcentaje': round(margen, 2)
+                })
+            except Product.DoesNotExist:
+                continue
+
+        # Ventas por día
+        ventas_por_dia = ventas.values('fecha__date').annotate(
+            total_dia=Sum('total'),
+            cantidad_dia=Count('id')
+        ).order_by('fecha__date')
+
+        return Response({
+            'periodo': {
+                'tipo': periodo,
+                'fecha_inicio': inicio.strftime('%Y-%m-%d'),
+                'fecha_fin': fin.strftime('%Y-%m-%d')
+            },
+            'metricas': {
+                'total_ingresos': float(total_ingresos),
+                'total_costos': total_costos,
+                'total_ganancia': total_ganancia,
+                'margen_promedio': round(margen_promedio, 2),
+                'total_ventas': total_ventas,
+                'promedio_venta': round(float(total_ingresos) / total_ventas, 2) if total_ventas > 0 else 0
+            },
+            'ventas_por_dia': [
+                {
+                    'dia': v['fecha__date'].strftime('%Y-%m-%d'),
+                    'total_dia': float(v['total_dia']),
+                    'cantidad_dia': v['cantidad_dia']
+                }
+                for v in ventas_por_dia
+            ],
+            'productos_rentables': productos_con_ganancia
+        }, status=200)
