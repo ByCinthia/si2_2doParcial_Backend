@@ -44,4 +44,7 @@ urlpatterns = [
     
     # Compras endpoints
     path('api/compras/', include('compras.urls')),
+    
+    # Ventas endpoints
+    path('api/ventas/', include('ventas.urls')),
 ]

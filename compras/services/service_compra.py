@@ -142,18 +142,61 @@ class CompraService:
             return False, {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR
     
     @staticmethod
-    def eliminar_compra(id_compra):
+    @transaction.atomic
+    def actualizar_compra(id_compra, data):
         """
-        Elimina una compra. 
-        NOTA: No revierte el stock porque se asume que la compra ya fue procesada.
-        Si necesitas revertir stock, debes implementar esa lógica.
+        Actualiza una compra existente.
+        Permite actualizar proveedor y/o imagen.
+        NO permite actualizar detalles (para eso se debe eliminar y crear nueva).
         """
         try:
             compra = Compra.objects.get(idCompra=id_compra)
+            
+            # Actualizar proveedor si se proporciona
+            if 'proveedor' in data:
+                try:
+                    proveedor = Proveedor.objects.get(idProveedor=data['proveedor'])
+                    compra.proveedor = proveedor
+                except Proveedor.DoesNotExist:
+                    return False, {"error": "Proveedor no encontrado"}, status.HTTP_404_NOT_FOUND
+            
+            # Actualizar imagen si se proporciona
+            if 'imagen' in data and data['imagen']:
+                compra.imagen = data['imagen']
+            
+            compra.save()
+            
+            compra_serializada = CompraSerializer(compra)
+            return True, {
+                "mensaje": "Compra actualizada correctamente",
+                "compra": compra_serializada.data
+            }, status.HTTP_200_OK
+            
+        except Compra.DoesNotExist:
+            return False, {"error": "Compra no encontrada"}, status.HTTP_404_NOT_FOUND
+        except Exception as e:
+            return False, {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR
+    
+    @staticmethod
+    @transaction.atomic
+    def eliminar_compra(id_compra):
+        """
+        Elimina una compra y todos sus detalles (CASCADE).
+        Los detalles se eliminan automáticamente por la relación CASCADE en el modelo.
+        NOTA: No revierte el stock de los productos.
+        """
+        try:
+            compra = Compra.objects.get(idCompra=id_compra)
+            
+            # Contar detalles antes de eliminar
+            cantidad_detalles = compra.detalles.count()
+            
+            # Eliminar compra (los detalles se eliminan automáticamente por CASCADE)
             compra.delete()
             
             return True, {
-                "mensaje": "Compra eliminada correctamente"
+                "mensaje": "Compra eliminada correctamente",
+                "detalles_eliminados": cantidad_detalles
             }, status.HTTP_200_OK
             
         except Compra.DoesNotExist:

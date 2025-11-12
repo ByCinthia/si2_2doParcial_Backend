@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .services.services_categoria import CategoriaService
 from .services.sevices_producto import ProductoService
 
@@ -65,6 +66,7 @@ class CategoriaBuscarView(APIView):
 class ProductoListCreateView(APIView):
     """Vista para listar y crear productos"""
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get(self, request):
         """Lista todos los productos"""
@@ -72,7 +74,7 @@ class ProductoListCreateView(APIView):
         return Response(data, status=status)
     
     def post(self, request):
-        """Crea un nuevo producto"""
+        """Crea un nuevo producto (acepta imagen)"""
         success, data, status = ProductoService.crear_producto(request.data)
         return Response(data, status=status)
 
@@ -80,6 +82,7 @@ class ProductoListCreateView(APIView):
 class ProductoDetailView(APIView):
     """Vista para obtener, actualizar y eliminar un producto"""
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get(self, request, id_producto):
         """Obtiene un producto por ID"""
@@ -87,12 +90,12 @@ class ProductoDetailView(APIView):
         return Response(data, status=status)
     
     def put(self, request, id_producto):
-        """Actualiza un producto"""
+        """Actualiza un producto (acepta imagen)"""
         success, data, status = ProductoService.actualizar_producto(id_producto, request.data)
         return Response(data, status=status)
     
     def patch(self, request, id_producto):
-        """Actualiza parcialmente un producto"""
+        """Actualiza parcialmente un producto (acepta imagen)"""
         success, data, status = ProductoService.actualizar_producto(id_producto, request.data)
         return Response(data, status=status)
     

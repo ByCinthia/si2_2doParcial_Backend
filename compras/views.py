@@ -27,7 +27,8 @@ class ProveedorListCreateView(APIView):
 class ProveedorDetailView(APIView):
     """
     GET /api/compras/proveedores/{id}/ - Obtiene un proveedor
-    PUT /api/compras/proveedores/{id}/ - Actualiza un proveedor
+    PUT /api/compras/proveedores/{id}/ - Actualiza un proveedor completamente
+    PATCH /api/compras/proveedores/{id}/ - Actualiza un proveedor parcialmente
     DELETE /api/compras/proveedores/{id}/ - Elimina un proveedor
     """
     permission_classes = [IsAuthenticated]
@@ -37,6 +38,10 @@ class ProveedorDetailView(APIView):
         return Response(result, status=status_code)
     
     def put(self, request, id_proveedor):
+        success, result, status_code = ProveedorService.actualizar_proveedor(id_proveedor, request.data)
+        return Response(result, status=status_code)
+    
+    def patch(self, request, id_proveedor):
         success, result, status_code = ProveedorService.actualizar_proveedor(id_proveedor, request.data)
         return Response(result, status=status_code)
     
@@ -83,12 +88,23 @@ class CompraListCreateView(APIView):
 class CompraDetailView(APIView):
     """
     GET /api/compras/{id}/ - Obtiene una compra con sus detalles
-    DELETE /api/compras/{id}/ - Elimina una compra
+    PUT /api/compras/{id}/ - Actualiza una compra (proveedor y/o imagen)
+    PATCH /api/compras/{id}/ - Actualiza una compra parcialmente
+    DELETE /api/compras/{id}/ - Elimina una compra y todos sus detalles
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get(self, request, id_compra):
         success, result, status_code = CompraService.obtener_compra(id_compra)
+        return Response(result, status=status_code)
+    
+    def put(self, request, id_compra):
+        success, result, status_code = CompraService.actualizar_compra(id_compra, request.data)
+        return Response(result, status=status_code)
+    
+    def patch(self, request, id_compra):
+        success, result, status_code = CompraService.actualizar_compra(id_compra, request.data)
         return Response(result, status=status_code)
     
     def delete(self, request, id_compra):
