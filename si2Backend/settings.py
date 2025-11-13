@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import environ
 from datetime import timedelta
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -105,9 +106,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
-    'cloudinary_storage',
     'cloudinary',
-   # 'corsheaders',   # <-- agregado
+    'cloudinary_storage',
+    'corsheaders',  # <- SOLO AQUI, una sola vez
     'usuarios',
     'productos',  # nueva app
     'categorias',  # app de categorías añadida
@@ -115,10 +116,14 @@ INSTALLED_APPS = [
     'ventas',
 ]
 
+# ya se añadieron arriba 'cloudinary' y 'cloudinary_storage' — no repetirlos
+
 if USE_CORS:
-    INSTALLED_APPS.insert(0, 'corsheaders')  # opcional: añadir al inicio
+    # NO añadir corsheaders aquí de nuevo — ya está arriba
+    pass
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # debe ir primero
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -127,10 +132,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-if USE_CORS:
-    # corsheaders debe ir antes de CommonMiddleware
-    MIDDLEWARE.insert(1, 'corsheaders.middleware.CorsMiddleware')
 
 ROOT_URLCONF = 'si2Backend.urls'
 
@@ -158,9 +159,9 @@ WSGI_APPLICATION = 'si2Backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'boutique2',
+        'NAME': 'ecomerce_db',
         'USER': 'postgres',
-        'PASSWORD': '9638660',
+        'PASSWORD': '7722794',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -204,23 +205,14 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Cloudinary Configuration
-# Cloudinary Configuration (optional). If CLOUDINARY env vars are provided we use
-# cloudinary_storage, otherwise fall back to local filesystem storage for media.
-CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default=None)
-CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default=None)
-CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default=None)
+#CLOUDINARY_STORAGE = {
+ #   'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME'),
+  #  'API_KEY': env('CLOUDINARY_API_KEY'),
+   # 'API_SECRET': env('CLOUDINARY_API_SECRET'),
+#}
 
-if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
-    CLOUDINARY_STORAGE = {
-        'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
-        'API_KEY': CLOUDINARY_API_KEY,
-        'API_SECRET': CLOUDINARY_API_SECRET,
-    }
-    # Set Cloudinary as default file storage
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-else:
-    # Local development fallback: store uploaded media under ./media
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+# Set Cloudinary as default file storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Media files (local fallback)
 MEDIA_URL = '/media/'
@@ -243,7 +235,7 @@ REST_FRAMEWORK = {
 
 # Simple JWT Configuration
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),  # Duración del token de acceso
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Duración del token de acceso
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),      # Duración del token de refresco
     'ROTATE_REFRESH_TOKENS': True,                    # Genera nuevo refresh token al refrescar
     'BLACKLIST_AFTER_ROTATION': True,                 # Invalida el refresh token anterior

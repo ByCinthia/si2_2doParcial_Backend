@@ -1,4 +1,4 @@
-Ejemplos de uso de la API de categorías
+# Ejemplos de uso — app `categorias`
 
 - Listar categorías: GET /api/categorias/
 - Crear categoría: POST /api/categorias/ { "nombre": "Ropa", "descripcion": "..." }
@@ -6,3 +6,5 @@ Ejemplos de uso de la API de categorías
 - Actualizar categoría: PUT/PATCH /api/categorias/<id>/
 - Desactivar (soft delete): DELETE /api/categorias/<id>/
 - Buscar por nombre: GET /api/categorias/buscar/?nombre=Ropa
+
+Nota: las imágenes de productos se gestionan en la app `productos`. Consulta `productos/EJEMPLOS_IMAGENES.md` para ejemplos de subida y verificación en Cloudinary.

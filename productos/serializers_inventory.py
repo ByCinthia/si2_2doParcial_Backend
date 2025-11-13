@@ -1,15 +1,14 @@
 from rest_framework import serializers
-from .models import InventoryMovement
+from .models import ProductImage
 
 
-class InventoryMovementSerializer(serializers.ModelSerializer):
-    usuario = serializers.SerializerMethodField()
+class ProductImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = InventoryMovement
-        fields = ['id', 'variant', 'usuario', 'previous_stock', 'new_stock', 'delta', 'motivo', 'fecha']
+        model = ProductImage
+        fields = ['id', 'product', 'image', 'image_url', 'alt_text', 'is_main', 'order', 'created_at']
+        read_only_fields = ['id', 'image_url', 'created_at']
 
-    def get_usuario(self, obj):
-        if obj.usuario:
-            return {'id': obj.usuario.idUsuario, 'username': obj.usuario.username, 'email': obj.usuario.email}
-        return None
+    def get_image_url(self, obj):
+        return obj.image_url
