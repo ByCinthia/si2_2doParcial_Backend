@@ -55,3 +55,37 @@ class Usuario(models.Model):
     def is_anonymous(self):
         """Siempre retorna False"""
         return False
+
+    # Propiedades necesarias para integración con Django admin/permissions
+    @property
+    def is_staff(self):
+        """Considerar al usuario como staff si su rol es administrador."""
+        try:
+            nombre_rol = (self.rol.nombre or '').upper().replace(' ', '')
+            # Tratar variaciones como 'SuperAdmin', 'SUPER ADMIN', 'superadmin'
+            return ('ADMIN' in nombre_rol) or ('SUPER' in nombre_rol) or ('STAFF' in nombre_rol)
+        except Exception:
+            return False
+
+    @property
+    def is_superuser(self):
+        """Marcar como superusuario si el rol lo indica explícitamente."""
+        try:
+            nombre_rol = (self.rol.nombre or '').upper().replace(' ', '')
+            # Considerar superuser si contiene 'SUPER' (ej: 'SuperAdmin')
+            return 'SUPER' in nombre_rol
+        except Exception:
+            return False
+
+    @property
+    def is_active(self):
+        """Compatibilidad con Django: activo <-> campo 'activo'."""
+        return bool(self.activo)
+
+    def has_perm(self, perm, obj=None):
+        """Permisos simplificados: el staff tiene permisos generales."""
+        return bool(self.is_staff)
+
+    def has_module_perms(self, app_label):
+        """Permisos por módulo (simplificado)."""
+        return bool(self.is_staff)

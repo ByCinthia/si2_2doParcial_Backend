@@ -1,0 +1,49 @@
+# Dependencias opcionales para el sistema de reportes dinámicos
+
+# === DEPENDENCIAS PRINCIPALES (Requeridas) ===
+# Ya incluidas en requirements.txt del proyecto principal
+# django>=4.0
+# djangorestframework
+# python-dateutil
+
+# === DEPENDENCIAS OPCIONALES ===
+# Instalar según las funcionalidades deseadas
+
+# Para reportes Excel
+openpyxl>=3.0.0
+
+# Para reportes PDF
+reportlab>=3.6.0
+
+# Para procesamiento de voz (Speech-to-Text)
+SpeechRecognition>=3.8.0
+pyaudio>=0.2.11  # Para captura de audio en tiempo real
+
+# Para integración con OpenAI Whisper (opcional)
+openai>=1.0.0
+
+# Para procesamiento de audio offline (alternativa)
+vosk>=0.3.30
+
+# === INSTRUCCIONES DE INSTALACIÓN ===
+
+# Instalar todas las dependencias opcionales:
+# pip install openpyxl reportlab SpeechRecognition pyaudio openai
+
+# Instalar solo Excel y PDF (sin voz):
+# pip install openpyxl reportlab
+
+# Instalar solo funcionalidad de voz:
+# pip install SpeechRecognition pyaudio
+
+# === NOTAS ===
+# - pyaudio puede requerir compilación en algunos sistemas
+# - En Windows: pip install pipwin; pipwin install pyaudio
+# - En Ubuntu/Debian: sudo apt-get install python3-pyaudio
+# - En macOS: brew install portaudio; pip install pyaudio
+
+# El sistema funciona sin estas dependencias, pero con funcionalidad limitada:
+# - Sin openpyxl: No se pueden generar reportes Excel
+# - Sin reportlab: No se pueden generar reportes PDF
+# - Sin speech_recognition: No se pueden procesar prompts de voz
+# - CSV y JSON siempre están disponibles

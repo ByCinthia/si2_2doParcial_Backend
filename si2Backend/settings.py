@@ -43,6 +43,17 @@ CSRF_TRUSTED_ORIGINS = [
     
 ]
 
+# Añadir orígenes extra para desarrollo (p. ej. Vite/CRA en puerto 5173)
+# Se puede extender mediante la variable de entorno CSRF_TRUSTED_ORIGINS_EXTRA
+EXTRA_CSRF_TRUSTED = env.list('CSRF_TRUSTED_ORIGINS_EXTRA', default=[
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+])
+
+for origin in EXTRA_CSRF_TRUSTED:
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
+
 # decidir si activamos CORS desde .env
 USE_CORS = env.bool('USE_CORS', default=True)
 
@@ -52,6 +63,36 @@ if USE_CORS:
     CORS_ALLOW_ALL_ORIGINS = True
     # Permitir envío de credenciales (cookies) si el front los usa
     CORS_ALLOW_CREDENTIALS = True
+    # Headers/methods defaults (asegura que Authorization y Content-Type estén permitidos)
+    try:
+        from corsheaders.defaults import default_headers, default_methods
+        CORS_ALLOW_HEADERS = list(default_headers) + [
+            'authorization',
+            'content-type',
+        ]
+        CORS_ALLOW_METHODS = list(default_methods)
+    except Exception:
+        # corsheaders not installed or defaults not available yet; middleware will raise if missing
+        CORS_ALLOW_HEADERS = ['authorization', 'content-type']
+        CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+
+    # Expose common headers (e.g. for file downloads)
+    CORS_EXPOSE_HEADERS = [
+        'Content-Disposition',
+        'Authorization',
+    ]
+
+    # Limit CORS handling to API routes by default (optional)
+    CORS_URLS_REGEX = r'^/api/.*$'
+
+    # If you need credentialed requests from the frontend (fetch with credentials: 'include'),
+    # do NOT leave CORS_ALLOW_ALL_ORIGINS = True — instead configure the explicit origins
+    # via the CORS_ALLOWED_ORIGINS env var. Example in .env: CORS_ALLOWED_ORIGINS=http://localhost:3000
+    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+    if CORS_ALLOWED_ORIGINS:
+        # when specific origins are set, disable the wildcard
+        CORS_ALLOW_ALL_ORIGINS = False
+        CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # Application definition
 
@@ -70,6 +111,7 @@ INSTALLED_APPS = [
     'usuarios',
     'productos',  # nueva app
     'categorias',  # app de categorías añadida
+    'reportes',
     'ventas',
 ]
 
@@ -162,17 +204,27 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Cloudinary Configuration
-#CLOUDINARY_STORAGE = {
- #   'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME'),
-  #  'API_KEY': env('CLOUDINARY_API_KEY'),
-   # 'API_SECRET': env('CLOUDINARY_API_SECRET'),
-#}
+# Cloudinary Configuration (optional). If CLOUDINARY env vars are provided we use
+# cloudinary_storage, otherwise fall back to local filesystem storage for media.
+CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default=None)
+CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default=None)
+CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default=None)
 
-# Set Cloudinary as default file storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+        'API_KEY': CLOUDINARY_API_KEY,
+        'API_SECRET': CLOUDINARY_API_SECRET,
+    }
+    # Set Cloudinary as default file storage
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    # Local development fallback: store uploaded media under ./media
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-# Media files
+# Media files (local fallback)
 MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
